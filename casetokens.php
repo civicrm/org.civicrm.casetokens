@@ -123,9 +123,14 @@ function casetokens_civicrm_alterSettingsFolders(&$metaDataFolders = NULL) {
 }
 
 /**
- * Implements hook_civicrm_tokens().
+ * Get the case id when loading tokens.
+ *
+ * This is hacky for now because of limitations in the token hooks.
+ * Ideally case_id would be passed to the hooks; instead we have to rely on _GET and _POST.
+ *
+ * @return int|null
  */
-function casetokens_civicrm_tokens(&$tokens) {
+function _casetokens_get_case_id() {
   // Hack to get case id from the url
   if (!empty($_GET['caseid'])) {
     \Civi::$statics['casetokens']['case_id'] = $_GET['caseid'];
@@ -136,9 +141,17 @@ function casetokens_civicrm_tokens(&$tokens) {
     preg_match('#caseid=(\d+)#', $_POST['entryURL'], $matches);
     \Civi::$statics['casetokens']['case_id'] = CRM_Utils_Array::value(1, $matches);
   }
-  if (!empty(\Civi::$statics['casetokens']['case_id'])) {
+  return isset(\Civi::$statics['casetokens']['case_id']) ? \Civi::$statics['casetokens']['case_id'] : NULL;
+}
+
+/**
+ * Implements hook_civicrm_tokens().
+ */
+function casetokens_civicrm_tokens(&$tokens) {
+  $caseId = _casetokens_get_case_id();
+  if ($caseId) {
     $case = civicrm_api3('Case', 'getsingle', array(
-      'id' => \Civi::$statics['casetokens']['case_id'],
+      'id' => $caseId,
       'return' => 'case_type_id.definition',
     ));
     $tokens['case_roles'] = array(
@@ -161,9 +174,8 @@ function casetokens_civicrm_tokens(&$tokens) {
  * Implements hook_civicrm_tokens().
  */
 function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = array(), $context = NULL) {
-  if (!empty(\Civi::$statics['casetokens']['case_id'])) {
-    $caseId = \Civi::$statics['casetokens']['case_id'];
-
+  $caseId = _casetokens_get_case_id();
+  if ($caseId) {
     // Get client(s)
     $caseContact = civicrm_api3('CaseContact', 'get', array(
       'case_id' => $caseId,
