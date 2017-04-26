@@ -141,7 +141,9 @@ function casetokens_civicrm_tokens(&$tokens) {
       'id' => \Civi::$statics['casetokens']['case_id'],
       'return' => 'case_type_id.definition',
     ));
-    $tokens['case_roles'] = array();
+    $tokens['case_roles'] = array(
+      'case_roles.client' => ts('Case Client(s)'),
+    );
     foreach ($case['case_type_id.definition']['caseRoles'] as $relation) {
       $relationship = civicrm_api3('RelationshipType', 'getsingle', array('name_b_a' => $relation['name']));
       $role = strtolower(CRM_Utils_String::munge($relation['name']));
@@ -161,8 +163,19 @@ function casetokens_civicrm_tokens(&$tokens) {
 function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = array(), $context = NULL) {
   if (!empty(\Civi::$statics['casetokens']['case_id'])) {
     $caseId = \Civi::$statics['casetokens']['case_id'];
+
+    // Get client(s)
+    $caseContact = civicrm_api3('CaseContact', 'get', array(
+      'case_id' => $caseId,
+      'options' => array('limit' => 0),
+      'contact_id.is_deleted' => 0,
+      'return' => array('contact_id.display_name'),
+    ));
+    $clients = implode(', ', CRM_Utils_Array::collect('contact_id.display_name', $caseContact['values']));
+
+    // Get contacts from case roles
     $relations = civicrm_api3('Relationship', 'get', array(
-      'case_id' => $caseId, 
+      'case_id' => $caseId,
       'options' => array('limit' => 0),
       'is_active' => 1,
       'contact_id_a.is_deleted' => 0,
@@ -175,7 +188,10 @@ function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = 
         $contacts[$role] = civicrm_api3('Contact', 'getsingle', array('id' => $rel['contact_id_b']));
       }
     }
+
+    // Fill tokens
     foreach ($values as &$set) {
+      $set['case_roles.client'] = $clients;
       foreach ($contacts as $role => $contact) {
         $set["case_roles.{$role}_display_name"] = $contact['display_name'];
         $set["case_roles.{$role}_email"] = CRM_Utils_Array::value('email', $contact);

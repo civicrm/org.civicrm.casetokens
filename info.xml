@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <extension key="org.civicrm.casetokens" type="module">
   <file>casetokens</file>
-  <name>FIXME</name>
-  <description>FIXME</description>
+  <name>CiviCase Tokens</name>
+  <description>Adds extra tokens for case roles.</description>
   <license>AGPL-3.0</license>
   <maintainer>
     <author>Coleman Watts</author>
