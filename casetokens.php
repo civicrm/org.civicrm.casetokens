@@ -165,6 +165,7 @@ function casetokens_civicrm_tokens(&$tokens) {
         "case_roles.{$role}_address" => $relationship['label_b_a'] . ' - ' . ts('Address'),
         "case_roles.{$role}_phone" => $relationship['label_b_a'] . ' - ' . ts('Phone'),
         "case_roles.{$role}_email" => $relationship['label_b_a'] . ' - ' . ts('Email'),
+        "case_roles.{$role}_website" => $relationship['label_b_a'] . ' - ' . ts('Website'),
       );
     }
   }
