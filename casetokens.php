@@ -172,7 +172,7 @@ function casetokens_civicrm_tokens(&$tokens) {
 }
 
 /**
- * Implements hook_civicrm_tokens().
+ * Implements hook_civicrm_tokenvalues().
  */
 function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = array(), $context = NULL) {
   $caseId = _casetokens_get_case_id();
