@@ -228,7 +228,6 @@ function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = 
     ));
     $clients = implode(', ', CRM_Utils_Array::collect('contact_id.display_name', $caseContact['values']));
 
-    $tomorrow = date('Y-m-d', strtotime(' +1 day'));
     $today = date('Y-m-d', time());
 
     $query = "SELECT crt.name_b_a, cr.contact_id_b " .
@@ -236,7 +235,7 @@ function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = 
       "INNER JOIN civicrm_relationship_type crt ON cr.relationship_type_id = crt.id " .
       "INNER JOIN civicrm_contact cc ON cr.contact_id_b = cc.id " .
       "WHERE cr.is_active = 1 AND cr.case_id = $caseId AND cc.is_deleted = 0 " .
-      "AND ((cr.start_date < '$tomorrow' OR cr.start_date IS NULL) AND (cr.end_date > '$today' OR cr.end_date IS NULL)) " .
+      "AND ((cr.start_date <= '$today' OR cr.start_date IS NULL) AND (cr.end_date >= '$today' OR cr.end_date IS NULL)) " .
       "order by cr.id";
     $relations = CRM_Core_DAO::executeQuery($query)->fetchAll();
 
