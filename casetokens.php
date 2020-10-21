@@ -145,39 +145,57 @@ function _casetokens_get_case_id() {
 }
 
 /**
- * Get all the contact entity fields.
+ * Get all the contact fields that are to be removed.
  *
  * @return array
  */
-function _casetokens_get_contact_fields() {
-  $contactId = CRM_Core_Session::singleton()->getLoggedInContactID();
-  $contactFields = array();
-  try {
-    $contactFields = civicrm_api3('contact', 'getsingle', array(
-      'id' => $contactId,
-    ));
-  } catch (Throwable $ex) {
-  }
-
-  return array_keys($contactFields);
+function _casetokens_get_contact_fields_to_remove() {
+  return array (
+    'hash' => '',
+    'api_key' => '',
+    'contact_source' => '',
+    'email_greeting_id' => '',
+    'email_greeting_custom' => '',
+    'email_greeting_display' => '',
+    'postal_greeting_id' => '',
+    'postal_greeting_custom' => '',
+    'postal_greeting_display' => '',
+    'addressee_id' => '',
+    'addressee_custom' => '',
+    'addressee_display' => '',
+    'primary_contact_id' => '',
+    'user_unique_id' => '',
+    'current_employer_id' => '',
+    'created_date' => '',
+    'modified_date' => '',
+    'worldregion' => '',
+    'group' => '',
+    'tag' => '',
+    'uf_user' => '',
+    'birth_date_low' => '',
+    'birth_date_high' => '',
+    'deceased_date_low' => '',
+    'deceased_date_high' => ''
+  );
 }
 
 /**
- * Get all the contact custom fields.
+ * Get all the contact fields.
  *
  * @return array
  */
-function _casetokens_get_contact_custom_fields() {
+function _casetokens_get_contact_all_fields() {
   try {
-    $customFields = civicrm_api3('CustomField', 'get', array(
-      'custom_group_id.extends' => array('IN' => array("Contact", "Individual", "Household", "Organization")),
-    ));
+    $allFields = civicrm_api3('contact', 'getfields');
   } catch (Throwable $ex) {
   }
   $fields = array();
-  if (!empty($customFields) && !empty($customFields['values'])) {
-    foreach ($customFields['values'] as $id => $allFields) {
-      $fields['custom_' . $id] = $allFields['name'];
+  $fieldsToRemove = _casetokens_get_contact_fields_to_remove();
+  if (!empty($allFields) && !empty($allFields['values'])) {
+    foreach ($allFields['values'] as $key => $field) {
+      if (!isset($fieldsToRemove[$key])) {
+        $fields[$key] = $field['title'];
+      }
     }
   }
 
@@ -197,14 +215,14 @@ function casetokens_civicrm_tokens(&$tokens) {
     $tokens['case_roles'] = array(
       'case_roles.client' => ts('Case Client(s)'),
     );
-    $allFields = array_merge(_casetokens_get_contact_fields(), _casetokens_get_contact_custom_fields());
+    $allFields = _casetokens_get_contact_all_fields();
     foreach ($case['case_type_id.definition']['caseRoles'] as $relation) {
       try {
         $relationship = civicrm_api3('RelationshipType', 'getsingle', array('name_b_a' => $relation['name']));
         $role = strtolower(CRM_Utils_String::munge($relation['name']));
-        foreach ($allFields as $field) {
-          $tokens['case_roles']["case_roles.{$role}_{$field}"] =
-            $relationship['label_b_a'] . ' - ' . ts(ucwords(str_replace("_", " ", $field)));
+        foreach ($allFields as $key =>$field) {
+          $tokens['case_roles']["case_roles.{$role}_{$key}"] =
+            $relationship['label_b_a'] . ' - ' . ts(ucwords($field));
         }
       }
       catch (Throwable $ex) {
@@ -240,15 +258,13 @@ function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = 
     $relations = CRM_Core_DAO::executeQuery($query)->fetchAll();
 
     $contacts = array();
-    $contactFields = _casetokens_get_contact_fields();
-    $customFields = _casetokens_get_contact_custom_fields();
-    $allFields = array_merge($contactFields, $customFields);
+    $allFields = _casetokens_get_contact_all_fields();
     foreach ($relations as $rel) {
       $role = strtolower(CRM_Utils_String::munge($rel['name_b_a']));
       if (empty($contacts[$role])) {
         $contacts[$role] = civicrm_api3('Contact', 'getsingle', array(
           'id' => $rel['contact_id_b'],
-          'return' => array_merge($contactFields, array_keys($customFields)),
+          'return' => array_keys($allFields),
           ));
       }
     }
@@ -260,8 +276,7 @@ function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = 
         if (strpos($fieldName, 'civicrm_value_') !== FALSE) {
           continue;
         }
-        $fieldName = (strpos($fieldName, 'custom_') !== FALSE) ? $customFields[$fieldName] : $fieldName;
-        if (in_array($fieldName, $allFields)) {
+        if (in_array($fieldName, array_keys($allFields))) {
           $key = "case_roles.{$role}_" . $fieldName;
           $caseRolesContact[$key] = $value;
         }
