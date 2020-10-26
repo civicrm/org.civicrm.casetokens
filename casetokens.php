@@ -145,6 +145,64 @@ function _casetokens_get_case_id() {
 }
 
 /**
+ * Get all the contact fields that are to be removed.
+ *
+ * @return array
+ */
+function _casetokens_get_contact_fields_to_remove() {
+  return array (
+    'hash' => '',
+    'api_key' => '',
+    'contact_source' => '',
+    'email_greeting_id' => '',
+    'email_greeting_custom' => '',
+    'email_greeting_display' => '',
+    'postal_greeting_id' => '',
+    'postal_greeting_custom' => '',
+    'postal_greeting_display' => '',
+    'addressee_id' => '',
+    'addressee_custom' => '',
+    'addressee_display' => '',
+    'primary_contact_id' => '',
+    'user_unique_id' => '',
+    'current_employer_id' => '',
+    'created_date' => '',
+    'modified_date' => '',
+    'worldregion' => '',
+    'group' => '',
+    'tag' => '',
+    'uf_user' => '',
+    'birth_date_low' => '',
+    'birth_date_high' => '',
+    'deceased_date_low' => '',
+    'deceased_date_high' => ''
+  );
+}
+
+/**
+ * Get all the contact fields.
+ *
+ * @return array
+ */
+function _casetokens_get_contact_all_fields() {
+  try {
+    $allFields = civicrm_api3('contact', 'getfields');
+  } catch (Throwable $ex) {
+  }
+  $fields = array();
+  $fieldsToRemove = _casetokens_get_contact_fields_to_remove();
+  if (!empty($allFields) && !empty($allFields['values'])) {
+    foreach ($allFields['values'] as $key => $field) {
+      if (!isset($fieldsToRemove[$key])) {
+        $fields[$key] = $field['title'];
+      }
+    }
+  }
+
+  return $fields;
+}
+
+/**
  * Implements hook_civicrm_tokens().
  */
 function casetokens_civicrm_tokens(&$tokens) {
@@ -157,16 +215,18 @@ function casetokens_civicrm_tokens(&$tokens) {
     $tokens['case_roles'] = array(
       'case_roles.client' => ts('Case Client(s)'),
     );
+    $allFields = _casetokens_get_contact_all_fields();
     foreach ($case['case_type_id.definition']['caseRoles'] as $relation) {
-      $relationship = civicrm_api3('RelationshipType', 'getsingle', array('name_b_a' => $relation['name']));
-      $role = strtolower(CRM_Utils_String::munge($relation['name']));
-      $tokens['case_roles'] += array(
-        "case_roles.{$role}_display_name" => $relationship['label_b_a'] . ' - ' . ts('Display Name'),
-        "case_roles.{$role}_address" => $relationship['label_b_a'] . ' - ' . ts('Address'),
-        "case_roles.{$role}_phone" => $relationship['label_b_a'] . ' - ' . ts('Phone'),
-        "case_roles.{$role}_email" => $relationship['label_b_a'] . ' - ' . ts('Email'),
-        "case_roles.{$role}_website" => $relationship['label_b_a'] . ' - ' . ts('Website'),
-      );
+      try {
+        $relationship = civicrm_api3('RelationshipType', 'getsingle', array('name_b_a' => $relation['name']));
+        $role = strtolower(CRM_Utils_String::munge($relation['name']));
+        foreach ($allFields as $key =>$field) {
+          $tokens['case_roles']["case_roles.{$role}_{$key}"] =
+            $relationship['label_b_a'] . ' - ' . ts(ucwords($field));
+        }
+      }
+      catch (Throwable $ex) {
+      }
     }
   }
 }
@@ -176,7 +236,7 @@ function casetokens_civicrm_tokens(&$tokens) {
  */
 function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = array(), $context = NULL) {
   $caseId = _casetokens_get_case_id();
-  if ($caseId) {
+  if ($caseId && !empty($tokens['case_roles'])) {
     // Get client(s)
     $caseContact = civicrm_api3('CaseContact', 'get', array(
       'case_id' => $caseId,
@@ -186,31 +246,45 @@ function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = 
     ));
     $clients = implode(', ', CRM_Utils_Array::collect('contact_id.display_name', $caseContact['values']));
 
-    // Get contacts from case roles
-    $relations = civicrm_api3('Relationship', 'get', array(
-      'case_id' => $caseId,
-      'options' => array('limit' => 0),
-      'is_active' => 1,
-      'contact_id_a.is_deleted' => 0,
-      'return' => array('relationship_type_id.name_b_a', 'contact_id_b'),
-    ));
+    $today = date('Y-m-d', time());
+
+    $query = "SELECT crt.name_b_a, cr.contact_id_b " .
+      "FROM civicrm_relationship cr " .
+      "INNER JOIN civicrm_relationship_type crt ON cr.relationship_type_id = crt.id " .
+      "INNER JOIN civicrm_contact cc ON cr.contact_id_b = cc.id " .
+      "WHERE cr.is_active = 1 AND cr.case_id = $caseId AND cc.is_deleted = 0 " .
+      "AND ((cr.start_date <= '$today' OR cr.start_date IS NULL) AND (cr.end_date >= '$today' OR cr.end_date IS NULL)) " .
+      "order by cr.id";
+    $relations = CRM_Core_DAO::executeQuery($query)->fetchAll();
+
     $contacts = array();
-    foreach ($relations['values'] as $rel) {
-      $role = strtolower(CRM_Utils_String::munge($rel['relationship_type_id.name_b_a']));
+    $allFields = _casetokens_get_contact_all_fields();
+    foreach ($relations as $rel) {
+      $role = strtolower(CRM_Utils_String::munge($rel['name_b_a']));
       if (empty($contacts[$role])) {
-        $contacts[$role] = civicrm_api3('Contact', 'getsingle', array('id' => $rel['contact_id_b']));
+        $contacts[$role] = civicrm_api3('Contact', 'getsingle', array(
+          'id' => $rel['contact_id_b'],
+          'return' => array_keys($allFields),
+          ));
       }
     }
 
     // Fill tokens
-    foreach ($values as &$set) {
-      $set['case_roles.client'] = $clients;
-      foreach ($contacts as $role => $contact) {
-        $set["case_roles.{$role}_display_name"] = $contact['display_name'];
-        $set["case_roles.{$role}_email"] = CRM_Utils_Array::value('email', $contact);
-        $set["case_roles.{$role}_phone"] = CRM_Utils_Array::value('phone', $contact);
-        $set["case_roles.{$role}_address"] = CRM_Utils_Address::format($contact);
+    $caseRolesContact = array();
+    foreach ($contacts as $role => $contact) {
+      foreach ($contact as $fieldName => $value) {
+        if (strpos($fieldName, 'civicrm_value_') !== FALSE) {
+          continue;
+        }
+        if (in_array($fieldName, array_keys($allFields))) {
+          $key = "case_roles.{$role}_" . $fieldName;
+          $caseRolesContact[$key] = $value;
+        }
       }
+    }
+    $caseRolesContact['case_roles.client'] = $clients;
+    foreach ($cids as $cid) {
+      $values[$cid] = empty($values[$cid]) ? $caseRolesContact : array_merge($values[$cid], $caseRolesContact);
     }
   }
 }
