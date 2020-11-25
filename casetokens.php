@@ -228,6 +228,11 @@ function casetokens_civicrm_tokens(&$tokens) {
       catch (Throwable $ex) {
       }
     }
+    //adding tokens for client case role
+    foreach ($allFields as $key =>$field) {
+      $tokens['case_roles']["case_roles.client_{$key}"] =
+        "Case Client". ' - ' . ts(ucwords($field));
+    }
   }
 }
 
@@ -242,7 +247,8 @@ function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = 
       'case_id' => $caseId,
       'options' => array('limit' => 0),
       'contact_id.is_deleted' => 0,
-      'return' => array('contact_id.display_name'),
+      'sequential' => 1,
+      'return' => array('contact_id.display_name','contact_id.id'),
     ));
     $clients = implode(', ', CRM_Utils_Array::collect('contact_id.display_name', $caseContact['values']));
 
@@ -268,7 +274,13 @@ function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = 
           ));
       }
     }
-
+    //fill client values
+    if (!empty($caseContact['values']) && !empty($caseContact['values'][0])) {
+      $contacts['client'] = civicrm_api3('Contact', 'getsingle', [
+        'id' => $caseContact['values'][0]['contact_id.id'],
+        'return' => array_keys($allFields),
+      ]);
+    }
     // Fill tokens
     $caseRolesContact = array();
     foreach ($contacts as $role => $contact) {
