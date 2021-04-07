@@ -241,6 +241,12 @@ function casetokens_civicrm_tokens(&$tokens) {
  */
 function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = array(), $context = NULL) {
   $caseId = _casetokens_get_case_id();
+
+  if (!$caseId && !empty($values)) {
+    $caseContactData = current($values);
+    $caseId = isset($caseContactData['case.id']) ? $caseContactData['case.id'] : null;
+  }
+
   if ($caseId && !empty($tokens['case_roles'])) {
     // Get client(s)
     $caseContact = civicrm_api3('CaseContact', 'get', array(
