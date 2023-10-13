@@ -22,5 +22,9 @@
   <comments>Adds tokens for case client, manager and contact info for other case roles.</comments>
   <civix>
     <namespace>CRM/Casetokens</namespace>
+    <format>23.02.1</format>
   </civix>
+  <classloader>
+    <psr4 prefix="Civi\" path="Civi"/>
+  </classloader>
 </extension>
