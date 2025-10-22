@@ -46,7 +46,7 @@ function _casetokens_get_case_id() {
   if (empty(\Civi::$statics['casetokens']['case_id']) && !empty($_POST['entryURL'])) {
     $matches = array();
     preg_match('#caseid=(\d+)#', $_POST['entryURL'], $matches);
-    \Civi::$statics['casetokens']['case_id'] = CRM_Utils_Array::value(1, $matches);
+    \Civi::$statics['casetokens']['case_id'] = $matches[1] ?? NULL;
   }
   return isset(\Civi::$statics['casetokens']['case_id']) ? \Civi::$statics['casetokens']['case_id'] : NULL;
 }
