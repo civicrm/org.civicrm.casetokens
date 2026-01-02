@@ -115,6 +115,10 @@ function _casetokens_get_contact_all_fields() {
 function casetokens_civicrm_tokens(&$tokens) {
   $caseId = _casetokens_get_case_id();
   if ($caseId) {
+    if (str_contains($caseId, ',')) {
+      $caseId = (int) (explode(',', $caseId)[0]);
+    }
+
     $case = civicrm_api3('Case', 'getsingle', array(
       'id' => $caseId,
       'return' => 'case_type_id.definition',
@@ -155,6 +159,10 @@ function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = 
   }
 
   if ($caseId && !empty($tokens['case_roles'])) {
+    if (str_contains($caseId, ',')) {
+      $caseId = (int) (explode(',', $caseId)[0]);
+    }
+
     // Get client(s)
     $caseContact = civicrm_api3('CaseContact', 'get', array(
       'case_id' => $caseId,
