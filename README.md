@@ -8,17 +8,11 @@ The extension is licensed under [AGPL-3.0](LICENSE.txt).
 
 ## Requirements
 
-* PHP v5.4+
-* CiviCRM 4.7+
+* CiviCRM 5.51+
 
-## Installation (Web UI)
+## Installation
 
-This extension can be installed via the Web UI.
-
-## Installation (CLI, Zip)
-
-Sysadmins and developers may download the `.zip` file for this extension and
-install it with the command-line tool [cv](https://github.com/civicrm/cv).
+This extension can be installed normally via the Web UI.
 
 ```bash
 cd <extension-dir>
