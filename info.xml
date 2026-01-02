@@ -17,12 +17,12 @@
   <version>1.5</version>
   <develStage>stable</develStage>
   <compatibility>
-    <ver>5.0</ver>
+    <ver>5.51</ver>
   </compatibility>
   <comments>Adds tokens for case client, manager and contact info for other case roles.</comments>
   <civix>
     <namespace>CRM/Casetokens</namespace>
-    <format>23.02.1</format>
+    <format>25.10.2</format>
   </civix>
   <classloader>
     <psr4 prefix="Civi\" path="Civi"/>
