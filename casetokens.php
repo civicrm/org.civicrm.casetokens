@@ -9,6 +9,7 @@ require_once 'casetokens.civix.php';
  */
 function casetokens_civicrm_config(&$config) {
   _casetokens_civix_civicrm_config($config);
+  \Civi::dispatcher()->addSubscriber(new \Civi\Casetokens\TokenListener());
 }
 
 /**
@@ -27,28 +28,6 @@ function casetokens_civicrm_install() {
  */
 function casetokens_civicrm_enable() {
   _casetokens_civix_civicrm_enable();
-}
-
-/**
- * Get the case id when loading tokens.
- *
- * This is hacky for now because of limitations in the token hooks.
- * Ideally case_id would be passed to the hooks; instead we have to rely on _GET and _POST.
- *
- * @return int|null
- */
-function _casetokens_get_case_id() {
-  // Hack to get case id from the url
-  if (!empty($_GET['caseid'])) {
-    \Civi::$statics['casetokens']['case_id'] = $_GET['caseid'];
-  }
-  // Extra hack to get it from the entry url after a form is posted
-  if (empty(\Civi::$statics['casetokens']['case_id']) && !empty($_POST['entryURL'])) {
-    $matches = array();
-    preg_match('#caseid=(\d+)#', $_POST['entryURL'], $matches);
-    \Civi::$statics['casetokens']['case_id'] = $matches[1] ?? NULL;
-  }
-  return isset(\Civi::$statics['casetokens']['case_id']) ? \Civi::$statics['casetokens']['case_id'] : NULL;
 }
 
 /**
@@ -110,114 +89,23 @@ function _casetokens_get_contact_all_fields() {
 }
 
 /**
- * Implements hook_civicrm_tokens().
+ * Get the case id when loading tokens.
+ *
+ * This is hacky for now because of limitations in the token hooks.
+ * Ideally case_id would be passed to the hooks; instead we have to rely on _GET and _POST.
+ *
+ * @return int|string|null
  */
-function casetokens_civicrm_tokens(&$tokens) {
-  $caseId = _casetokens_get_case_id();
-  if ($caseId) {
-    if (str_contains($caseId, ',')) {
-      $caseId = (int) (explode(',', $caseId)[0]);
-    }
-
-    $case = civicrm_api3('Case', 'getsingle', array(
-      'id' => $caseId,
-      'return' => 'case_type_id.definition',
-    ));
-    $tokens['case_roles'] = array(
-      'case_roles.client' => ts('Case Client(s)'),
-    );
-    $allFields = _casetokens_get_contact_all_fields();
-    foreach ($case['case_type_id.definition']['caseRoles'] as $relation) {
-      try {
-        $relationship = civicrm_api3('RelationshipType', 'getsingle', array('name_b_a' => $relation['name']));
-        $role = strtolower(CRM_Utils_String::munge($relation['name']));
-        foreach ($allFields as $key =>$field) {
-          $tokens['case_roles']["case_roles.{$role}_{$key}"] =
-            $relationship['label_b_a'] . ' - ' . ts(ucwords($field));
-        }
-      }
-      catch (Throwable $ex) {
-      }
-    }
-    //adding tokens for client case role
-    foreach ($allFields as $key =>$field) {
-      $tokens['case_roles']["case_roles.client_{$key}"] =
-        "Case Client". ' - ' . ts(ucwords($field));
-    }
+function _casetokens_get_case_id() {
+  // Hack to get case id from the url
+  if (!empty($_GET['caseid'])) {
+    \Civi::$statics['casetokens']['case_id'] = $_GET['caseid'];
   }
-}
-
-/**
- * Implements hook_civicrm_tokenvalues().
- */
-function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = array(), $context = NULL) {
-  $caseId = _casetokens_get_case_id();
-
-  if (!$caseId && !empty($values)) {
-    $caseContactData = current($values);
-    $caseId = isset($caseContactData['case.id']) ? $caseContactData['case.id'] : null;
+  // Extra hack to get it from the entry url after a form is posted
+  if (empty(\Civi::$statics['casetokens']['case_id']) && !empty($_POST['entryURL'])) {
+    $matches = array();
+    preg_match('#caseid=([0-9,]+)#', $_POST['entryURL'], $matches);
+    \Civi::$statics['casetokens']['case_id'] = $matches[1] ?? NULL;
   }
-
-  if ($caseId && !empty($tokens['case_roles'])) {
-    if (str_contains($caseId, ',')) {
-      $caseId = (int) (explode(',', $caseId)[0]);
-    }
-
-    // Get client(s)
-    $caseContact = civicrm_api3('CaseContact', 'get', array(
-      'case_id' => $caseId,
-      'options' => array('limit' => 0),
-      'contact_id.is_deleted' => 0,
-      'sequential' => 1,
-      'return' => array('contact_id.display_name','contact_id.id'),
-    ));
-    $clients = implode(', ', CRM_Utils_Array::collect('contact_id.display_name', $caseContact['values']));
-
-    $today = date('Y-m-d', time());
-
-    $query = "SELECT crt.name_b_a, cr.contact_id_b " .
-      "FROM civicrm_relationship cr " .
-      "INNER JOIN civicrm_relationship_type crt ON cr.relationship_type_id = crt.id " .
-      "INNER JOIN civicrm_contact cc ON cr.contact_id_b = cc.id " .
-      "WHERE cr.is_active = 1 AND cr.case_id = $caseId AND cc.is_deleted = 0 " .
-      "AND ((cr.start_date <= '$today' OR cr.start_date IS NULL) AND (cr.end_date >= '$today' OR cr.end_date IS NULL)) " .
-      "order by cr.id";
-    $relations = CRM_Core_DAO::executeQuery($query)->fetchAll();
-
-    $contacts = array();
-    $allFields = _casetokens_get_contact_all_fields();
-    foreach ($relations as $rel) {
-      $role = strtolower(CRM_Utils_String::munge($rel['name_b_a']));
-      if (empty($contacts[$role])) {
-        $contacts[$role] = civicrm_api3('Contact', 'getsingle', array(
-          'id' => $rel['contact_id_b'],
-          'return' => array_keys($allFields),
-          ));
-      }
-    }
-    //fill client values
-    if (!empty($caseContact['values']) && !empty($caseContact['values'][0])) {
-      $contacts['client'] = civicrm_api3('Contact', 'getsingle', [
-        'id' => $caseContact['values'][0]['contact_id.id'],
-        'return' => array_keys($allFields),
-      ]);
-    }
-    // Fill tokens
-    $caseRolesContact = array();
-    foreach ($contacts as $role => $contact) {
-      foreach ($contact as $fieldName => $value) {
-        if (strpos($fieldName, 'civicrm_value_') !== FALSE) {
-          continue;
-        }
-        if (in_array($fieldName, array_keys($allFields))) {
-          $key = "case_roles.{$role}_" . $fieldName;
-          $caseRolesContact[$key] = $value;
-        }
-      }
-    }
-    $caseRolesContact['case_roles.client'] = $clients;
-    foreach ($cids as $cid) {
-      $values[$cid] = empty($values[$cid]) ? $caseRolesContact : array_merge($values[$cid], $caseRolesContact);
-    }
-  }
+  return isset(\Civi::$statics['casetokens']['case_id']) ? \Civi::$statics['casetokens']['case_id'] : NULL;
 }
