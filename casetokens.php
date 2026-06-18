@@ -44,7 +44,7 @@ function _casetokens_get_case_id() {
   }
   // Extra hack to get it from the entry url after a form is posted
   if (empty(\Civi::$statics['casetokens']['case_id']) && !empty($_POST['entryURL'])) {
-    $matches = array();
+    $matches = [];
     preg_match('#caseid=(\d+)#', $_POST['entryURL'], $matches);
     \Civi::$statics['casetokens']['case_id'] = $matches[1] ?? NULL;
   }
@@ -57,7 +57,7 @@ function _casetokens_get_case_id() {
  * @return array
  */
 function _casetokens_get_contact_fields_to_remove() {
-  return array (
+  return [
     'hash' => '',
     'api_key' => '',
     'contact_source' => '',
@@ -83,7 +83,7 @@ function _casetokens_get_contact_fields_to_remove() {
     'birth_date_high' => '',
     'deceased_date_low' => '',
     'deceased_date_high' => ''
-  );
+  ];
 }
 
 /**
@@ -96,7 +96,7 @@ function _casetokens_get_contact_all_fields() {
     $allFields = civicrm_api3('contact', 'getfields');
   } catch (Throwable $ex) {
   }
-  $fields = array();
+  $fields = [];
   $fieldsToRemove = _casetokens_get_contact_fields_to_remove();
   if (!empty($allFields) && !empty($allFields['values'])) {
     foreach ($allFields['values'] as $key => $field) {
@@ -119,17 +119,17 @@ function casetokens_civicrm_tokens(&$tokens) {
       $caseId = (int) (explode(',', $caseId)[0]);
     }
 
-    $case = civicrm_api3('Case', 'getsingle', array(
+    $case = civicrm_api3('Case', 'getsingle', [
       'id' => $caseId,
       'return' => 'case_type_id.definition',
-    ));
-    $tokens['case_roles'] = array(
+    ]);
+    $tokens['case_roles'] = [
       'case_roles.client' => ts('Case Client(s)'),
-    );
+    ];
     $allFields = _casetokens_get_contact_all_fields();
     foreach ($case['case_type_id.definition']['caseRoles'] as $relation) {
       try {
-        $relationship = civicrm_api3('RelationshipType', 'getsingle', array('name_b_a' => $relation['name']));
+        $relationship = civicrm_api3('RelationshipType', 'getsingle', ['name_b_a' => $relation['name']]);
         $role = strtolower(CRM_Utils_String::munge($relation['name']));
         foreach ($allFields as $key =>$field) {
           $tokens['case_roles']["case_roles.{$role}_{$key}"] =
@@ -150,7 +150,7 @@ function casetokens_civicrm_tokens(&$tokens) {
 /**
  * Implements hook_civicrm_tokenvalues().
  */
-function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = array(), $context = NULL) {
+function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = [], $context = NULL) {
   $caseId = _casetokens_get_case_id();
 
   if (!$caseId && !empty($values)) {
@@ -164,13 +164,13 @@ function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = 
     }
 
     // Get client(s)
-    $caseContact = civicrm_api3('CaseContact', 'get', array(
+    $caseContact = civicrm_api3('CaseContact', 'get', [
       'case_id' => $caseId,
-      'options' => array('limit' => 0),
+      'options' => ['limit' => 0],
       'contact_id.is_deleted' => 0,
       'sequential' => 1,
-      'return' => array('contact_id.display_name','contact_id.id'),
-    ));
+      'return' => ['contact_id.display_name','contact_id.id'],
+    ]);
     $clients = implode(', ', CRM_Utils_Array::collect('contact_id.display_name', $caseContact['values']));
 
     $today = date('Y-m-d', time());
@@ -184,15 +184,15 @@ function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = 
       "order by cr.id";
     $relations = CRM_Core_DAO::executeQuery($query)->fetchAll();
 
-    $contacts = array();
+    $contacts = [];
     $allFields = _casetokens_get_contact_all_fields();
     foreach ($relations as $rel) {
       $role = strtolower(CRM_Utils_String::munge($rel['name_b_a']));
       if (empty($contacts[$role])) {
-        $contacts[$role] = civicrm_api3('Contact', 'getsingle', array(
+        $contacts[$role] = civicrm_api3('Contact', 'getsingle', [
           'id' => $rel['contact_id_b'],
           'return' => array_keys($allFields),
-          ));
+        ]);
       }
     }
     //fill client values
@@ -203,7 +203,7 @@ function casetokens_civicrm_tokenvalues(&$values, $cids, $job = NULL, $tokens = 
       ]);
     }
     // Fill tokens
-    $caseRolesContact = array();
+    $caseRolesContact = [];
     foreach ($contacts as $role => $contact) {
       foreach ($contact as $fieldName => $value) {
         if (strpos($fieldName, 'civicrm_value_') !== FALSE) {
